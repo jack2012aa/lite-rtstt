@@ -5,4 +5,5 @@ The speech to text server based on [RealtimeSTT](https://github.com/KoljaB/Realt
 1. Install portaudio
 ```shell
 brew install portaudio
+brew install ffmpeg@6
 ```
