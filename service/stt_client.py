@@ -33,7 +33,6 @@ class STTClient:
         self.on_text = on_text
         self.thread: Thread = None
         self.thread_stop = Event()
-        prompt = "The audio is related to a coding interview."
         self.recorder = AudioToTextRecorder(
             model="base",
             language="en",
@@ -41,7 +40,6 @@ class STTClient:
             device="cpu",
             use_microphone=False,
             webrtc_sensitivity=3,
-            initial_prompt=prompt,
             level=logging.DEBUG,
             compute_type="float32",
             enable_realtime_transcription=True,
