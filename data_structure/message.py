@@ -2,7 +2,11 @@
 
 from dataclasses import dataclass
 
-__all__ = ["SpeechTranscriptMessage", "TranscriptionStartMessage"]
+__all__ = [
+    "SpeechTranscriptMessage",
+    "StartSpeakingMessage",
+    "StopSpeakingMessage",
+]
 
 
 @dataclass
@@ -10,11 +14,18 @@ class SpeechTranscriptMessage:
     """Speech transcript message."""
 
     title: str = "speech transcript"
-    text: str = ""
+    transcript: str = ""
 
 
 @dataclass
-class TranscriptionStartMessage:
-    """Transcription start message."""
+class StartSpeakingMessage:
+    """Start speaking message."""
 
-    title: str = "transcription start"
+    title: str = "start speaking"
+
+
+@dataclass
+class StopSpeakingMessage:
+    """Stop speaking message."""
+
+    title: str = "stop speaking"
