@@ -40,11 +40,11 @@ class STTClient:
             device="cpu",
             use_microphone=False,
             webrtc_sensitivity=3,
-            level=logging.DEBUG,
             compute_type="float32",
             enable_realtime_transcription=True,
             realtime_model_type="tiny.en",
-            post_speech_silence_duration=1.0,
+            # post_speech_silence_duration=1.0,
+            # on_realtime_transcription_stabilized=on_text,
             on_recording_start=on_recording_start,
             on_recording_stop=on_recording_stop,
         )

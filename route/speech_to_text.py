@@ -26,7 +26,6 @@ async def speech_to_text(websocket: WebSocket) -> None:
     """
 
     # TODO Check authentication.
-    await websocket.accept()
     logging.info("WebSocket connection established.")
 
     loop = asyncio.get_event_loop()
@@ -56,6 +55,7 @@ async def speech_to_text(websocket: WebSocket) -> None:
 
     sst_client = STTClient(on_text, on_start_speaking, on_stop_speaking)
     sst_client.start()
+    await websocket.accept()
 
     try:
         while True:
