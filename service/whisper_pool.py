@@ -16,28 +16,30 @@ class WhisperPool:
     __instance = None
 
     @staticmethod
-    def get_instance(size: int = 1, model_type: str = "tiny.en") -> "WhisperPool":
+    def get_instance(size: int = 1, model_type: str = "tiny.en", cuda: bool = False) -> "WhisperPool":
         """Get the singleton instance of the whisper pool.
 
         Args:
             size (int, optional): Size of the pool. Defaults to 1.
             model_type (str, optional): Type of the Whipser model. Defaults to "tiny.en".
+            cuda (bool, optional): Use cuda. Defaults to False.
 
         Returns:
             WhisperPool: The instance.
         """
 
         if WhisperPool.__instance is None:
-            WhisperPool.__instance = WhisperPool(size, model_type)
+            WhisperPool.__instance = WhisperPool(size, model_type, cuda)
         return WhisperPool.__instance
     
 
-    def __init__(self, size: int = 1, model_type: str = "tiny.en") -> None:
+    def __init__(self, size: int = 1, model_type: str = "tiny.en", cuda:bool = False) -> None:
         """Create a whisper pool. You shouldn't call this constructure. Use get_instance() instead.
 
         Args:
             size (int, optional): Size of the pool. Defaults to 1.
             model_type (str, optional): Type of the Whipser model. Defaults to "tiny.en".
+            cuda (bool, optional): Use cuda. Defaults to False.
         Raises:
             FileNotFoundError: When the warmup audio file is not found.
         """
@@ -55,6 +57,7 @@ class WhisperPool:
         self.__inputs = queue.Queue()
         self.__model_type = model_type
         self.__size = size
+        self.__cuda = cuda
         # Wait for every model to be loaded
         self.__ready_threads = threading.Semaphore()
         logging.debug("Whisper pool created.")
@@ -66,7 +69,10 @@ class WhisperPool:
     def __worker(self) -> None:
         """Load the model and start listening for work."""
 
-        model = whisper.load_model(self.__model_type)
+        if self.__cuda:
+            model = whisper.load_model(self.__model_type, device="cuda")
+        else:
+            model = whisper.load_model(self.__model_type)
         # Warmup the model
         model.transcribe(self.__warmup_audio)
         self.__ready_threads.release()

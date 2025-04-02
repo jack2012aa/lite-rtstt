@@ -1,6 +1,7 @@
 from datetime import datetime
 import asyncio
 import argparse
+import random
 
 import numpy
 import websockets
@@ -46,6 +47,7 @@ async def simulate_client_together(i, uri, data, repeat):
                 send = await send_coroutine(websocket, data, i)
                 get = await get_coroutine(websocket, i)
                 print(get - send)
+                await asyncio.sleep(random.uniform(0.1, 0.5))
             except asyncio.CancelledError:
                 pass
 
