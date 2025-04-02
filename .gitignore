@@ -4,4 +4,5 @@ __pycache__/
 .DS_Store
 .vscode/
 *.log
-quick_test.py
+test/personal
+test_env
