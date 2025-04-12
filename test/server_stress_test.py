@@ -6,7 +6,6 @@ import random
 import numpy
 import websockets
 
-
 async def send_coroutine(
     websocket: websockets.ClientConnection, int16_arr: numpy.ndarray, id
 ):
@@ -16,10 +15,12 @@ async def send_coroutine(
         if len(chunk) < chunk_size:
             chunk = numpy.pad(chunk, (0, chunk_size - len(chunk)), "constant")
         await websocket.send(chunk.tobytes())
+        await asyncio.sleep(0.01)
+    real_start_time = datetime.now()
     blank = b"0" * chunk_size * 2
     for i in range(200):
         await websocket.send(blank)
-    return datetime.now()
+    return real_start_time
 
 async def get_coroutine(websocket: websockets.ClientConnection, id):
     while True:
@@ -44,10 +45,13 @@ async def simulate_client_together(i, uri, data, repeat):
     async with websockets.connect(uri) as websocket:
         for _ in range(repeat):
             try:
-                send = await send_coroutine(websocket, data, i)
-                get = await get_coroutine(websocket, i)
-                print(get - send)
                 await asyncio.sleep(random.uniform(0.1, 0.5))
+                tasks = [
+                    asyncio.create_task(send_coroutine(websocket, data, i)),
+                    asyncio.create_task(get_coroutine(websocket, i)),
+                ]
+                results = await asyncio.gather(*tasks)
+                print(results[1] - results[0])
             except asyncio.CancelledError:
                 pass
 

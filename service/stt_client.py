@@ -161,7 +161,7 @@ class STTClientV2:
                 logging.warning("Invalid STTClientV2 event received.")
 
     def feed(self, audio: bytes) -> None:
-        """Feed audio bytse to the vad and try to transcribe it.
+        """Feed audio bytes to the vad and try to transcribe it.
 
         Args:
             audio (bytes): 16-bit 16000Hz 10ms/20ms/30ms audio chunk.
