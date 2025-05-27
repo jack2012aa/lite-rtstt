@@ -14,7 +14,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="STT Server")
     parser.add_argument("--port", type=int, help="Port number for the server", default=8766)
-    parser.add_argument("--api", type=bool, help="Use the API for STT", default=False)
+    parser.add_argument("--api", action="store_true", help="Use the API for STT")
     parser.add_argument("--pool_size", type=int, help="Size of the whisper pool", default=1)
     parser.add_argument("--model_type", type=str, help="Type of the whisper model", default="tiny.en")
     parser.add_argument("--cuda", action="store_true", help="Use CUDA for GPU acceleration")

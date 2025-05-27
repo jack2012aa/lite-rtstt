@@ -115,7 +115,7 @@ async def speech_to_text_v2(websocket: WebSocket) -> None:
     except RuntimeError:
         logging.error(f"STT client closed unexpectedly.")
         stt_client.close()
-        websocket.close()
+        await websocket.close()
     except Exception as e:
         stt_client.close()
         logging.info(
