@@ -8,6 +8,7 @@ from dataclasses import asdict
 from fastapi import APIRouter, WebSocket
 
 from service.stt_client import STTClientV2
+from service.speechmatics_api_client import SpeechmaticsClient
 from service.structure import *
 
 __all__ = ["stt_router"]
@@ -99,15 +100,24 @@ async def speech_to_text_v2(websocket: WebSocket) -> None:
         asyncio.run_coroutine_threadsafe(
             websocket.send_json(mono_stop_speaking_message), loop
         )
-    
 
-    stt_client = STTClientV2(on_text, on_start_speaking, on_stop_speaking)
+    # stt_client = STTClientV2(on_text, on_start_speaking, on_stop_speaking)
+    stt_client = SpeechmaticsClient(on_text, on_start_speaking, on_stop_speaking)
     await websocket.accept()
-    logging.info(f"WebSocket connection established at {datetime.now()} from host {websocket.client.host}.")
+    logging.info(
+        f"WebSocket connection established at {datetime.now()} from host {websocket.client.host}."
+    )
     try:
         while True:
             data = await websocket.receive_bytes()
             stt_client.feed(data)
+    # TODO Add a handler for stt client exceptions.
+    except RuntimeError:
+        logging.error(f"STT client closed unexpectedly.")
+        stt_client.close()
+        websocket.close()
     except Exception as e:
         stt_client.close()
-        logging.info(f"WebSocket connection closed at {datetime.now()} from host {websocket.client.host}.")
+        logging.info(
+            f"WebSocket connection closed at {datetime.now()} from host {websocket.client.host}."
+        )
