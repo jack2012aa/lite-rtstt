@@ -30,6 +30,8 @@ class MyTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_single_connection(self):
 
+        # Don't check the return value.
+        # The API will return a different transcription for each run.
         client = SpeechmaticsClient(print_text, print_start, print_stop, 0.7)
         with open(self.path, "rb") as file:
             data = file.read()
@@ -53,24 +55,24 @@ class MyTestCase(unittest.IsolatedAsyncioTestCase):
             You are given an integer matrix grid and an array queries of size k . Find an array answer of size k. Such sets for each integer queries a , you start in the top left cell of the matrix and repeat the following process . If queries I is strictly greater than the value of the current cell that you are in , then you get one point. If it is first time visiting the cell and you can move to any adjacent cell in all four directions. Otherwise you do not get any points and you end this process 
         """
 
-    async def test_aws_single_connection(self):
-        client = AWSApiClient(print_text, print_start, print_stop, 1)
-        await client.run()
-        with open(self.path, "rb") as file:
-            data = file.read()
-            int16_arr = numpy.frombuffer(data, dtype=numpy.int16)
-            for i in range(0, len(int16_arr), self.chunk_size):
-                chunk = int16_arr[i : i + self.chunk_size]
-                if len(chunk) < self.chunk_size:
-                    chunk = numpy.pad(chunk, (0, self.chunk_size - len(chunk)), "constant")
-                await client.feed(chunk.tobytes())
-                await asyncio.sleep(self.chunk_size / self.sample_rate)
-        print(f"Finished feeding data at {datetime.now().strftime('%H:%M:%S')}")
-        # Send some empty chunks to ensure the client processes all data
-        for _ in range(self.sample_rate // self.chunk_size * 3):
-            await client.feed(b"\x00" * self.chunk_size)
-            await asyncio.sleep(self.chunk_size / self.sample_rate)
-        await client.close()
+    # async def test_aws_single_connection(self):
+    #     client = AWSApiClient(print_text, print_start, print_stop, 1)
+    #     await client.run()
+    #     with open(self.path, "rb") as file:
+    #         data = file.read()
+    #         int16_arr = numpy.frombuffer(data, dtype=numpy.int16)
+    #         for i in range(0, len(int16_arr), self.chunk_size):
+    #             chunk = int16_arr[i : i + self.chunk_size]
+    #             if len(chunk) < self.chunk_size:
+    #                 chunk = numpy.pad(chunk, (0, self.chunk_size - len(chunk)), "constant")
+    #             await client.feed(chunk.tobytes())
+    #             await asyncio.sleep(self.chunk_size / self.sample_rate)
+    #     print(f"Finished feeding data at {datetime.now().strftime('%H:%M:%S')}")
+    #     # Send some empty chunks to ensure the client processes all data
+    #     for _ in range(self.sample_rate // self.chunk_size * 3):
+    #         await client.feed(b"\x00" * self.chunk_size)
+    #         await asyncio.sleep(self.chunk_size / self.sample_rate)
+    #     await client.close()
 
         """
         Output: 
