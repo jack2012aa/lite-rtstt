@@ -79,6 +79,7 @@ class SpeechmaticsClient:
             if message["metadata"]["transcript"] != "":
                 if len(self.__words) == 0:
                     on_recording_start()
+                self.__empty_final = 0
                 self.__words.append(message["metadata"]["transcript"])
             elif len(self.__words) > 0:
                 self.__empty_final += 1
