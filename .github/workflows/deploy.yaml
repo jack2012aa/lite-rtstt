@@ -3,7 +3,7 @@ name: Deploy to ECR and ECS on Main Merge
 on:
   push:
     branches:
-      - feature/api # 或者你的主要分支名稱，例如 master
+      - main # 或者你的主要分支名稱，例如 master
 
 env:
   AWS_REGION: us-east-1                 # 例如：us-east-1
