@@ -9,7 +9,7 @@ env:
   AWS_REGION: us-east-1                 # 例如：us-east-1
   ECR_REPOSITORY: syntax-next/stt    # 例如：my-app/my-service 或單純 my-service (不含 ECR 網址前綴)
   ECS_CLUSTER_NAME: stt-cluster     # 你的 ECS 叢集名稱
-  ECS_SERVICE_NAME: stt-api-server-service-xg7yksfe     # 你的 ECS 服務名稱
+  ECS_SERVICE_NAME: stt-api-server-service-ymh0zci3     # 你的 ECS 服務名稱
   ECS_TASK_DEFINITION_FAMILY: stt-api-server # 你的 ECS 任務定義家族名稱，例如 my-app-task-def
   CONTAINER_NAME: stt-api-server # 在任務定義中要更新映像檔的容器名稱
 

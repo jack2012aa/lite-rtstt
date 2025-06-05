@@ -77,8 +77,6 @@ class SpeechmaticsClient:
 
             # See here for the message format: https://docs.speechmatics.com/rt-api-ref#addtranscript
             if message["metadata"]["transcript"] != "":
-                if len(self.__words) == 0:
-                    on_recording_start()
                 self.__empty_final = 0
                 self.__words.append(message["metadata"]["transcript"])
             elif len(self.__words) > 0:
@@ -89,11 +87,19 @@ class SpeechmaticsClient:
                     on_recording_stop()
                     self.__empty_final = 0
 
+        def recording_start_handler(message: dict):
+            if message["metadata"]["transcript"] != "" and len(self.__words) == 0:
+                on_recording_start()
+
         connection.add_event_handler(
             event_handler=transcript_handler, event_name=ServerMessageType.AddTranscript
         )
+        connection.add_event_handler(
+            event_handler=recording_start_handler, 
+            event_name=ServerMessageType.AddPartialTranscript
+        )
         transcription_config = TranscriptionConfig(
-            language="en", enable_partials=False, max_delay=delay, max_delay_mode="flexible"
+            language="en", enable_partials=True, max_delay=delay, max_delay_mode="flexible"
         )
         audio_settings = AudioSettings(encoding="pcm_s16le", sample_rate=16000)
 

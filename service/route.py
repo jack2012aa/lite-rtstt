@@ -121,3 +121,7 @@ async def speech_to_text_v2(websocket: WebSocket) -> None:
         logging.info(
             f"WebSocket connection closed at {datetime.now()} from host {websocket.client.host}."
         )
+
+@stt_router.get("/health")
+def health_check() -> dict:
+    return {"status": "ok", "message": "STT service is running."}
