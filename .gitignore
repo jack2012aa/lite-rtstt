@@ -6,3 +6,5 @@ __pycache__/
 *.log
 test/personal
 test_env
+.gitsecret/keys/random_seed
+!*.secret

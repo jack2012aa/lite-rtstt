@@ -1,0 +1,120 @@
+name: Deploy to ECR and ECS on Main Merge
+
+on:
+  push:
+    branches:
+      - main # 或者你的主要分支名稱，例如 master
+
+env:
+  AWS_REGION: us-east-1                 # 例如：us-east-1
+  ECR_REPOSITORY: syntax-next/stt    # 例如：my-app/my-service 或單純 my-service (不含 ECR 網址前綴)
+  ECS_CLUSTER_NAME: stt-cluster     # 你的 ECS 叢集名稱
+  ECS_SERVICE_NAME: stt-api-server-service-ymh0zci3     # 你的 ECS 服務名稱
+  ECS_TASK_DEFINITION_FAMILY: stt-api-server # 你的 ECS 任務定義家族名稱，例如 my-app-task-def
+  CONTAINER_NAME: stt-api-server # 在任務定義中要更新映像檔的容器名稱
+
+jobs:
+  build-and-deploy:
+    name: Build, Push to ECR, and Deploy to ECS
+    runs-on: ubuntu-latest
+    permissions: # 為了使用 OIDC 進行 AWS 身份驗證 (建議的最佳實踐)
+      id-token: write # 允許 GitHub Actions 工作流程取得 OIDC 權杖
+      contents: read  # 允許 checkout 程式碼
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 建議使用 OIDC 進行 AWS 身份驗證，比長期存取金鑰更安全
+      # 你需要在 AWS IAM 中設定 OIDC 提供者並建立一個角色給 GitHub Actions AssumeRole
+      - name: Configure AWS credentials (OIDC - Recommended)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::180754592048:role/GithubActions-ECR-ECS-deploy-role # 替換成你的 OIDC IAM 角色 ARN
+          aws-region: ${{ env.AWS_REGION }}
+      
+      # 如果你暫時無法設定 OIDC，可以使用存取金鑰 (請確保這些 Secrets 已在 GitHub Actions secrets 中設定好)
+      # 注意：長期存取金鑰的安全性較低
+      # - name: Configure AWS credentials (Access Keys)
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #     aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        # 此步驟會設定 Buildx，以便建置多平台映像檔，包括 linux/arm64
+
+      - name: Define image tag and ECR registry
+        id: image-def
+        run: |
+          echo "TAG=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT # 使用 Git commit SHA 的前7碼作為標籤
+          echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_OUTPUT
+          echo "IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image to ECR for linux/arm64
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            -t ${{ steps.image-def.outputs.IMAGE_URI }} \
+            -t ${{ steps.image-def.outputs.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest-arm64 \
+            --push \
+            .
+          # 如果你的 Dockerfile 不在根目錄，請使用 -f ./path/to/Dockerfile
+
+      - name: Download current ECS task definition
+        run: |
+          aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_DEFINITION_FAMILY }} --query taskDefinition --output json > current-task-definition.json
+          echo "Downloaded task definition:"
+          cat current-task-definition.json
+
+      - name: Update task definition with new image URI
+        id: update-task-def
+        run: |
+          echo "Updating task definition for container '${{ env.CONTAINER_NAME }}' with image '${{ steps.image-def.outputs.IMAGE_URI }}'"
+          # 使用 jq 更新容器定義中的映像檔，並移除註冊新版本時不需要的欄位
+          # 確保你的 GitHub Actions runner 有 jq (GitHub 提供的 runner 通常有內建)
+          jq --arg IMAGE_URI "${{ steps.image-def.outputs.IMAGE_URI }}" \
+             --arg CONTAINER_NAME "${{ env.CONTAINER_NAME }}" \
+             '( .containerDefinitions |= map(if .name == $CONTAINER_NAME then .image = $IMAGE_URI else . end) |
+                del(.taskDefinitionArn) |
+                del(.revision) |
+                del(.status) |
+                del(.requiresAttributes) |
+                del(.compatibilities) |
+                del(.registeredAt) |
+                del(.registeredBy) |
+                del(.previousTaskDefinitionArn) | 
+                del(.lastDeployedAt)
+             )' \
+          current-task-definition.json > new-task-definition.json
+          echo "Generated new task definition content:"
+          cat new-task-definition.json
+
+      - name: Register new ECS task definition revision
+        id: register-task-def
+        run: |
+          REGISTERED_TASK_DEF=$(aws ecs register-task-definition --cli-input-json file://new-task-definition.json)
+          NEW_TASK_DEF_ARN=$(echo "$REGISTERED_TASK_DEF" | jq -r '.taskDefinition.taskDefinitionArn')
+          echo "NEW_TASK_DEF_ARN=$NEW_TASK_DEF_ARN" >> $GITHUB_OUTPUT
+          echo "Registered new task definition: $NEW_TASK_DEF_ARN"
+          if [ -z "$NEW_TASK_DEF_ARN" ] || [ "$NEW_TASK_DEF_ARN" == "null" ]; then
+            echo "Failed to register new task definition or parse ARN."
+            echo "AWS Response: $REGISTERED_TASK_DEF"
+            exit 1
+          fi
+
+      - name: Update ECS service with new task definition revision
+        run: |
+          echo "Updating ECS service '${{ env.ECS_SERVICE_NAME }}' in cluster '${{ env.ECS_CLUSTER_NAME }}' to use task definition '${{ steps.register-task-def.outputs.NEW_TASK_DEF_ARN }}'"
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER_NAME }} \
+            --service ${{ env.ECS_SERVICE_NAME }} \
+            --task-definition ${{ steps.register-task-def.outputs.NEW_TASK_DEF_ARN }} \
+            --force-new-deployment # 強制新的部署，以確保使用新的任務定義
+          echo "ECS service update initiated."
