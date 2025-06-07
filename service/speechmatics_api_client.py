@@ -77,15 +77,14 @@ class SpeechmaticsClient:
 
             # See here for the message format: https://docs.speechmatics.com/rt-api-ref#addtranscript
             if message["metadata"]["transcript"] != "":
-                self.__empty_final = 0
                 self.__words.append(message["metadata"]["transcript"])
             elif len(self.__words) > 0:
-                self.__empty_final += 1
-                if self.__empty_final >= self.__empty_threshold:
-                    on_text("".join(self.__words))
-                    self.__words = []
-                    on_recording_stop()
-                    self.__empty_final = 0
+                if '.' not in self.__words[-1]:
+                    self.__words.append('.')
+                on_text("".join(self.__words))
+                self.__words = []
+                on_recording_stop()
+                self.__empty_final = 0
 
         def recording_start_handler(message: dict):
             if message["metadata"]["transcript"] != "" and len(self.__words) == 0:
