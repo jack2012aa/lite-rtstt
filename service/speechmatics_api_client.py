@@ -63,11 +63,9 @@ class SpeechmaticsClient:
         connection = WebsocketClient(connection_settings)
 
         self.__words = []
-        """A buffer for final words."""
-        self.__empty_final = 0
-        """Number of empty final messages received."""
-        self.__empty_threshold = 2
-        """Number of empty final messages before calling on_text."""
+        """A list of final words."""
+        self.__is_recording = False
+        """Is voice detected"""
         def transcript_handler(message: dict):
             """Buffer words and call on_text once the message terns to be empty.
 
@@ -76,29 +74,35 @@ class SpeechmaticsClient:
             """
 
             # See here for the message format: https://docs.speechmatics.com/rt-api-ref#addtranscript
-            if message["metadata"]["transcript"] != "":
+            # The API always sends the end punctuation after an empty message. We simply send a final message when we receive the empty message and throw orphan punctuation away.
+            if message["metadata"]["transcript"] not in ("", ' .', ' ?', ' !', ' ;', '. ', '? ', '! ', '; '):
+                if not self.__is_recording:
+                    on_recording_start()
+                    self.__is_recording = True
                 self.__words.append(message["metadata"]["transcript"])
             elif len(self.__words) > 0:
-                if '.' not in self.__words[-1]:
-                    self.__words.append('.')
-                on_text("".join(self.__words))
+                transcript = "".join(self.__words)
+                # Remove any space before punctuations.
+                transcript = transcript.replace(" .", ".").replace(" ?", "?").replace(" !", "!").replace(" ;", ";").replace(" ,", ",")
+                on_text(transcript)
                 self.__words = []
                 on_recording_stop()
-                self.__empty_final = 0
+                self.__is_recording = False
 
-        def recording_start_handler(message: dict):
-            if message["metadata"]["transcript"] != "" and len(self.__words) == 0:
-                on_recording_start()
+        # def recording_start_handler(message: dict):
+        #     # The api will send few more messages after the last final message.
+        #     if message["metadata"]["transcript"] != "":
+        #         on_recording_start()
 
         connection.add_event_handler(
             event_handler=transcript_handler, event_name=ServerMessageType.AddTranscript
         )
-        connection.add_event_handler(
-            event_handler=recording_start_handler, 
-            event_name=ServerMessageType.AddPartialTranscript
-        )
+        # connection.add_event_handler(
+        #     event_handler=recording_start_handler, 
+        #     event_name=ServerMessageType.AddPartialTranscript
+        # )
         transcription_config = TranscriptionConfig(
-            language="en", enable_partials=True, max_delay=delay, max_delay_mode="flexible"
+            language="en", enable_partials=False, max_delay=delay, max_delay_mode="flexible"
         )
         audio_settings = AudioSettings(encoding="pcm_s16le", sample_rate=16000)
 
