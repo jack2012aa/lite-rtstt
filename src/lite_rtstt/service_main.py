@@ -24,7 +24,8 @@ def load_service_config(base_dir: str) -> STTConfig:
         aggresiveness=3,
         sample_rate=16000,
         chunk_size_ms=30,
-        active_to_detection_ms=900
+        active_to_detection_ms=900,
+        max_buffered_chunks=500,
     )
     if not os.path.exists(path):
         return default_config
@@ -48,11 +49,11 @@ if __name__ == "__main__":
     DATA_DIR = os.environ.get("SNAP_DATA", "./")
     config = load_service_config(DATA_DIR)
 
-    rtc_vad = WebRTCClient(config)
-    silero_vad = SileroClient(config)
+    rtc = WebRTCClient(config)
+    silero = SileroClient(config)
     download_root = os.path.join(DATA_DIR, "whisper")
-    whisper_vad = WhisperClient(config, download_root)
-    rtstt = ThreeLayerRTSTTClient(config, rtc_vad, silero_vad, whisper_vad)
+    whisper = WhisperClient(config, download_root)
+    rtstt = ThreeLayerRTSTTClient(config, rtc, silero, whisper)
     rtstt.start()
 
     router = create_router(rtstt)

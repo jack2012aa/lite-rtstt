@@ -45,8 +45,7 @@ class SileroClient(VADClient):
     class SileroPoolWork:
         audio: numpy.ndarray
         loop: asyncio.AbstractEventLoop
-        is_done: asyncio.Semaphore
-        result: bool
+        future: asyncio.Future[bool]
 
     def __init__(self, config: STTConfig) -> None:
         """A VADClient that uses a Silero VAD pool for detection.
@@ -71,14 +70,15 @@ class SileroClient(VADClient):
             self.__input_semaphore.acquire()
             try:
                 work = self.__inputs.get()
-                if not isinstance(work, SileroClient.SileroPoolWork):
-                    logging.error("Silero worker received an invalid work.", stack_info=True)
-                    exit(1)
-                result = get_speech_timestamps(work.audio, model)
-                work.result = len(result) > 0
-                work.loop.call_soon_threadsafe(work.is_done.release)
             except queue.ShutDown:
                 break
+            try:
+                if not isinstance(work, SileroClient.SileroPoolWork):
+                    raise RuntimeError("Silero worker received an invalid work.")
+                result = get_speech_timestamps(work.audio, model)
+                work.loop.call_soon_threadsafe(work.future.set_result, len(result) > 0)
+            except Exception as e:
+                work.loop.call_soon_threadsafe(work.future.set_exception, e)
 
     def start(self) -> None:
         """Start the pool. You should call this method before using the pool."""
@@ -102,18 +102,15 @@ class SileroClient(VADClient):
 
     async def is_active(self, audio_buffer: AudioBuffer) -> bool:
         if not self.started:
-            logging.error("Silero pool is not started yet.", stack_info=True)
-            exit(1)
+            raise RuntimeError("Silero pool is not ready.")
         work = SileroClient.SileroPoolWork(
-            audio_buffer.to_ndarray(),
+            audio_buffer.to_float32_ndarray(),
             asyncio.get_running_loop(),
-            asyncio.Semaphore(0),
-            False
+            asyncio.get_running_loop().create_future(),
         )
         self.__inputs.put(work)
         self.__input_semaphore.release()
-        await work.is_done.acquire()
-        return work.result
+        return await work.future
 
 
 class WebRTCClient(VADClient):

@@ -22,5 +22,6 @@ class AudioBuffer:
     def to_bytes(self) -> bytes:
         return b"".join(self.__buffer)
 
-    def to_ndarray(self) -> numpy.ndarray:
-        return numpy.frombuffer(b"".join(self.__buffer), dtype=numpy.int16)
+    def to_float32_ndarray(self) -> numpy.ndarray:
+        int16_data = numpy.frombuffer(b"".join(self.__buffer), dtype=numpy.int16)
+        return int16_data.astype(numpy.float32) / 32768.0

@@ -60,7 +60,8 @@ class ThreeLayerRTSTTClient(RTSTTClient):
             second_vad_client: VADClient,
             stt_client: STTClient,
             max_silence_chunks: int,
-            min_active_to_detection_chunks: int
+            min_active_to_detection_chunks: int,
+            max_buffer_chunks: int,
         ) -> None:
             self.__audio_buffer = AudioBuffer()
             self.__state = self.State.SILENCE
@@ -70,6 +71,7 @@ class ThreeLayerRTSTTClient(RTSTTClient):
             self.__stt_client = stt_client
             self.__max_silence_chunks = max_silence_chunks
             self.__min_active_to_detection_chunks = min_active_to_detection_chunks
+            self.__max_buffered_chunks = max_buffer_chunks
 
         async def __feed_from_silence(self, new_buffer: AudioBuffer):
             is_active = await self.__first_vad_client.is_active(new_buffer)
@@ -96,6 +98,13 @@ class ThreeLayerRTSTTClient(RTSTTClient):
                     self.__silence_chunks = 0
                     task = asyncio.create_task(self.__stt_client.transcribe(audio_buffer))
                     return task
+            elif self.__audio_buffer.get_chunks_count() >= self.__max_buffered_chunks:
+                audio_buffer = self.__audio_buffer
+                self.__audio_buffer = AudioBuffer()
+                self.__state = self.State.SILENCE
+                self.__silence_chunks = 0
+                task = asyncio.create_task(self.__stt_client.transcribe(audio_buffer))
+                return task
             return None
 
         async def feed(self, audio: bytes) -> tuple['ThreeLayerRTSTTClient.AudioStreamStateMachine.State', 'ThreeLayerRTSTTClient.AudioStreamStateMachine.State', asyncio.Task[str] | None]:
@@ -111,8 +120,7 @@ class ThreeLayerRTSTTClient(RTSTTClient):
             elif self.__state == self.State.SPEAKING:
                 task = await self.__feed_from_speaking()
             else:
-                logging.error("Undefined state", stack_info=True)
-                exit(1)
+                raise RuntimeError(f"Undefined audio stream state {self.__state}")
             return current_state, self.__state, task
 
     def __init__(
@@ -136,6 +144,7 @@ class ThreeLayerRTSTTClient(RTSTTClient):
         self.__increasing_id = 0
         self.__max_silence_chunks = int(config.duration_time_ms / config.chunk_size_ms)
         self.__min_active_to_detection_chunks = int(config.active_to_detection_ms / config.chunk_size_ms)
+        self.__max_buffered_chunks = config.max_buffered_chunks
 
     def start(self):
         self.__first_vad_client.start()
@@ -150,14 +159,15 @@ class ThreeLayerRTSTTClient(RTSTTClient):
             self.__second_vad_client,
             self.__stt_client,
             self.__max_silence_chunks,
-            self.__min_active_to_detection_chunks
+            self.__min_active_to_detection_chunks,
+            self.__max_buffered_chunks
         )
         self.__queues[connection_id] = SimpleSTTEventQueue()
         return self.__queues[connection_id], connection_id
 
     def disconnect(self, connection_id: int) -> None:
-        self.__state_machines.pop(connection_id)
-        self.__queues.pop(connection_id)
+        self.__state_machines.pop(connection_id, None)
+        self.__queues.pop(connection_id, None)
 
     async def feed(self, connection_id: int, audio: bytes):
         state_machine = self.__state_machines[connection_id]

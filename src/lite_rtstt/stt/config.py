@@ -9,3 +9,4 @@ class STTConfig:
     sample_rate: int
     chunk_size_ms: int
     active_to_detection_ms: int
+    max_buffered_chunks: int

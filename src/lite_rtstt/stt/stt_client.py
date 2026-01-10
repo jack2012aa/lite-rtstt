@@ -39,8 +39,7 @@ class WhisperClient(STTClient):
     class Work:
         audio_array: np.ndarray
         loop: asyncio.AbstractEventLoop
-        is_done: asyncio.Semaphore
-        result: str
+        future: asyncio.Future[str]
 
     def __init__(self, config: STTConfig, download_root: str) -> None:
         """A Whisper-based STT client."""
@@ -59,15 +58,18 @@ class WhisperClient(STTClient):
             self.__input_semaphore.acquire()
             try:
                 work = self.__inputs.get()
-                if not isinstance(work, WhisperClient.Work):
-                    logging.error("Whisper worker received an invalid work.", stack_info=True)
-                    exit(1)
-                result = self.__model.transcribe(audio=work.audio_array)
-                if result.get("text", None) is not None:
-                    work.result = result["text"]
-                work.loop.call_soon_threadsafe(work.is_done.release)
             except queue.ShutDown:
                 break
+            try:
+                if not isinstance(work, WhisperClient.Work):
+                    raise RuntimeError("Whisper worker received an invalid work.")
+                result = self.__model.transcribe(audio=work.audio_array)
+                if result.get("text", None) is not None:
+                    work.loop.call_soon_threadsafe(work.future.set_result, result["text"])
+                else:
+                    work.loop.call_soon_threadsafe(work.future.set_result, result[""])
+            except Exception as e:
+                work.loop.call_soon_threadsafe(work.future.set_exception, e)
 
     def start(self):
         if self.started:
@@ -86,8 +88,12 @@ class WhisperClient(STTClient):
             self.__whisper_thread.join()
 
     async def transcribe(self, audio_buffer: AudioBuffer) -> str:
-        work = WhisperClient.Work(audio_buffer.to_ndarray(), asyncio.get_running_loop(), asyncio.Semaphore(0), "")
+        if not self.started:
+            raise RuntimeError("Whisper is not ready.")
+        work = WhisperClient.Work(
+            audio_buffer.to_float32_ndarray(),
+            asyncio.get_running_loop(),
+            asyncio.Future())
         self.__inputs.put(work)
         self.__input_semaphore.release()
-        await work.is_done.acquire()
-        return work.result
+        return await work.future

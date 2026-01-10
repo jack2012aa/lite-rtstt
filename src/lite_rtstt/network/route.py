@@ -32,7 +32,6 @@ def create_router(rtstt_client: RTSTTClient) -> APIRouter:
                         await websocket.send_json({"type": "text", "text": event.text})
                     else:
                         logging.error(f"Unknown event type: {event}", stack_info=True)
-                        exit(1)
                 except asyncio.QueueShutDown:
                     return
 
@@ -42,9 +41,9 @@ def create_router(rtstt_client: RTSTTClient) -> APIRouter:
             while True:
                 data = await websocket.receive_bytes()
                 await rtstt_client.feed(connection_id, data)
-        except RuntimeError:
-            logging.error(f"STT client closed unexpectedly.")
-            rtstt_client.disconnect(connection_id)
-            await websocket.close()
         except WebSocketDisconnect:
             rtstt_client.disconnect(connection_id)
+        except Exception as e:
+            logging.error(e, stack_info=True)
+            rtstt_client.disconnect(connection_id)
+            await websocket.close()
