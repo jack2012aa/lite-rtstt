@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lite-rtstt"
+version = "0.1.0"
+description = "A real-time speech to text server based on WebRTC, Silero VAD and Whisper."
+readme = "readme.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Chang-Yu Huang", email = "changyuh1919@vt.edu"}
+]
+keywords = ["stt", "whisper", "vad", "fastapi"]
+
+dependencies = [
+    "numpy",
+    "fastapi>=0.128.0",
+    "uvicorn",
+    "silero-vad",
+    "atomicx",
+    "openai-whisper",
+    "webrtcvad-wheels",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/jack2012aa/lite-rtstt"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["lite_rtstt*"]

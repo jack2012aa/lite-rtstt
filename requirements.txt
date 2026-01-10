@@ -3,3 +3,4 @@ fastapi~=0.128.0
 silero-vad
 atomicx
 openai-whisper
+webrtcvad-wheels
