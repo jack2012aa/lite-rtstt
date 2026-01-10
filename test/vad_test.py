@@ -20,9 +20,9 @@ class MockVADClientTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(RuntimeError):
             await self.__mock_client.is_active(None)
         self.__mock_client.start()
-        for expect in self.__results:
+        for expected in self.__results:
             actual = await self.__mock_client.is_active(None)
-            self.assertEqual(expect, actual)
+            self.assertEqual(expected, actual)
         self.__mock_client.close()
         with self.assertRaises(RuntimeError):
             await self.__mock_client.is_active(None)
