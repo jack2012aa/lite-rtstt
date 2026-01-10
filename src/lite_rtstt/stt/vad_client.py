@@ -10,6 +10,7 @@ import webrtcvad
 from atomicx import AtomicBool
 from silero_vad import load_silero_vad, get_speech_timestamps
 
+from lite_rtstt.atomic.counter import Counter
 from lite_rtstt.stt.audiobuffer import AudioBuffer
 from lite_rtstt.stt.config import STTConfig
 
@@ -38,6 +39,30 @@ class VADClient(ABC):
         pass
 
 
+class MockVADClient(VADClient):
+
+    def __init__(self) -> None:
+        self.__results = asyncio.Queue()
+        self.__started = False
+        self.__closed = False
+
+    async def append_result(self, *results: bool) -> None:
+        for result in results:
+            await self.__results.put(result)
+
+    def start(self) -> None:
+        self.__started = True
+
+    def close(self) -> None:
+        self.__closed = True
+
+    async def is_active(self, audio_buffer: AudioBuffer) -> bool:
+        if not self.__started:
+            raise RuntimeError("MockVADClient is not ready.")
+        if self.__closed:
+            raise RuntimeError("MockVADClient is closed.")
+        return self.__results.get_nowait()
+
 class SileroClient(VADClient):
 
 
@@ -59,13 +84,13 @@ class SileroClient(VADClient):
         self.__pool = [threading.Thread(target=self.__worker, daemon=True) for _ in range(config.vad_threads)]
         self.__inputs = queue.Queue()
         self.__input_semaphore = threading.Semaphore(0)
-        self.__ready_threads = threading.Semaphore(-config.vad_threads + 1)
+        self.__ready_threads = Counter()
 
     def __worker(self) -> None:
         """Load the model and start listening for work."""
 
         model = load_silero_vad()
-        self.__ready_threads.release()
+        self.__ready_threads.increment()
         while not self.__closed.load():
             self.__input_semaphore.acquire()
             try:
@@ -87,7 +112,7 @@ class SileroClient(VADClient):
         for thread in self.__pool:
             thread.start()
         logging.debug("Waiting for silero pool to be ready.")
-        self.__ready_threads.acquire()
+        self.__ready_threads.wait_for(len(self.__pool))
         self.started = True
         logging.debug("Silero pool started.")
 
@@ -95,7 +120,8 @@ class SileroClient(VADClient):
         if not self.__closed.load():
             self.__closed.store(True)
             self.__inputs.shutdown(True)
-            self.__input_semaphore.release()
+            for _ in range(len(self.__pool)):
+                self.__input_semaphore.release()
             for thread in self.__pool:
                 thread.join()
             self.__pool.clear()
@@ -103,6 +129,8 @@ class SileroClient(VADClient):
     async def is_active(self, audio_buffer: AudioBuffer) -> bool:
         if not self.started:
             raise RuntimeError("Silero pool is not ready.")
+        if self.__closed.load():
+            raise RuntimeError("Silero pool is closed.")
         work = SileroClient.SileroPoolWork(
             audio_buffer.to_float32_ndarray(),
             asyncio.get_running_loop(),
@@ -119,12 +147,18 @@ class WebRTCClient(VADClient):
         """A light-weighted VAD based on web rtc VAD"""
         self.__vad = webrtcvad.Vad(config.aggresiveness)
         self.__sample_rate = config.sample_rate
+        self.__started = False
+        self.__closed = False
 
     def start(self):
-        pass
+        self.__started = True
 
     def close(self):
-        pass
+        self.__closed = True
 
     async def is_active(self, audio_buffer: AudioBuffer) -> bool:
+        if not self.__started:
+            raise RuntimeError("WebRTCClient is not ready.")
+        if self.__closed:
+            raise RuntimeError("WebRTCClient is closed.")
         return self.__vad.is_speech(audio_buffer.to_bytes(), self.__sample_rate)

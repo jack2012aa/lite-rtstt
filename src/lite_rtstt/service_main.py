@@ -17,16 +17,7 @@ from lite_rtstt.stt.vad_client import WebRTCClient, SileroClient
 def load_service_config(base_dir: str) -> STTConfig:
     file_name = "stt_config.json"
     path = os.path.join(base_dir, file_name)
-    default_config = STTConfig(
-        vad_threads=4,
-        whisper_model="base",
-        duration_time_ms=1200,
-        aggresiveness=3,
-        sample_rate=16000,
-        chunk_size_ms=30,
-        active_to_detection_ms=900,
-        max_buffered_chunks=500,
-    )
+    default_config = STTConfig.default()
     if not os.path.exists(path):
         return default_config
     with open(path, "r") as f:

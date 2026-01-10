@@ -19,6 +19,9 @@ class AudioBuffer:
     def get_chunks_count(self) -> int:
         return len(self.__buffer)
 
+    def get_chunk(self, index: int) -> bytes:
+        return self.__buffer[index]
+
     def to_bytes(self) -> bytes:
         return b"".join(self.__buffer)
 
