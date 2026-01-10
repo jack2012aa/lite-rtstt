@@ -8,3 +8,10 @@ test/personal
 test_env
 .gitsecret/keys/random_seed
 !*.secret
+flat.py
+full_project.txt
+lite-rtstt.iml
+misc.xml
+modules.xml
+profiles_settings.xml
+vcs.xml

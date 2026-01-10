@@ -48,8 +48,6 @@ class SileroClient(VADClient):
         is_done: asyncio.Semaphore
         result: bool
 
-    __TOMBSTONE = SileroPoolWork(None, None, None, False)
-
     def __init__(self, config: STTConfig) -> None:
         """A VADClient that uses a Silero VAD pool for detection.
 
@@ -71,15 +69,16 @@ class SileroClient(VADClient):
         self.__ready_threads.release()
         while not self.__closed.load():
             self.__input_semaphore.acquire()
-            work = self.__inputs.get()
-            if work == SileroClient.__TOMBSTONE:
+            try:
+                work = self.__inputs.get()
+                if not isinstance(work, SileroClient.SileroPoolWork):
+                    logging.error("Silero worker received an invalid work.", stack_info=True)
+                    exit(1)
+                result = get_speech_timestamps(work.audio, model)
+                work.result = len(result) > 0
+                work.loop.call_soon_threadsafe(work.is_done.release)
+            except queue.ShutDown:
                 break
-            if not isinstance(work, SileroClient.SileroPoolWork):
-                logging.error("Silero worker received an invalid work.", stack_info=True)
-                exit(1)
-            result = get_speech_timestamps(work.audio, model)
-            work.result = len(result) > 0
-            work.loop.call_soon_threadsafe(work.is_done.release)
 
     def start(self) -> None:
         """Start the pool. You should call this method before using the pool."""
@@ -93,11 +92,13 @@ class SileroClient(VADClient):
         logging.debug("Silero pool started.")
 
     def close(self) -> None:
-        self.__closed.store(True)
-        self.__inputs.put(SileroClient.__TOMBSTONE)
-        self.__input_semaphore.release()
-        for thread in self.__pool:
-            thread.join()
+        if not self.__closed.load():
+            self.__closed.store(True)
+            self.__inputs.shutdown(True)
+            self.__input_semaphore.release()
+            for thread in self.__pool:
+                thread.join()
+            self.__pool.clear()
 
     async def is_active(self, audio_buffer: AudioBuffer) -> bool:
         if not self.started:
@@ -126,7 +127,7 @@ class WebRTCClient(VADClient):
         pass
 
     def close(self):
-        self.__vad = None
+        pass
 
     async def is_active(self, audio_buffer: AudioBuffer) -> bool:
         return self.__vad.is_speech(audio_buffer.to_bytes(), self.__sample_rate)

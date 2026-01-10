@@ -3,121 +3,48 @@
 from datetime import datetime
 import asyncio
 import logging
-from dataclasses import asdict
 
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-__all__ = ["stt_router"]
-
-
-stt_router = APIRouter()
+from lite_rtstt.stt.event import StartSpeakingEvent, StopSpeakingEvent, TextEvent
+from lite_rtstt.stt.rtstt_client import RTSTTClient
 
 
-# @stt_router.websocket("/stt")
-# async def speech_to_text(websocket: WebSocket) -> None:
-#     """Receive audio bytes and return text.
+def create_router(rtstt_client: RTSTTClient) -> APIRouter:
+    router = APIRouter()
 
-#     Args:
-#         websocket (WebSocket): a WebSocket connection.
-#     """
+    @router.websocket("/rtstt")
+    async def real_time_speech_to_text(websocket: WebSocket) -> None:
+        await websocket.accept()
+        logging.info(f"WebSocket connection established at {datetime.now()} from host {websocket.client.host}.")
+        queue, connection_id = rtstt_client.connect()
+        is_closed = False
 
-#     # TODO Check authentication.
-#     logging.info("WebSocket connection established.")
+        async def handle_event():
+            while not is_closed:
+                try:
+                    event = await queue.get()
+                    if isinstance(event, StartSpeakingEvent):
+                        await websocket.send_json({"type": "start speaking"})
+                    elif isinstance(event, StopSpeakingEvent):
+                        await websocket.send_json({"type": "stop speaking"})
+                    elif isinstance(event, TextEvent):
+                        await websocket.send_json({"type": "text", "text": event.text})
+                    else:
+                        logging.error(f"Unknown event type: {event}", stack_info=True)
+                        exit(1)
+                except asyncio.QueueShutDown:
+                    return
 
-#     loop = asyncio.get_event_loop()
+        task = asyncio.create_task(handle_event())
 
-#     def on_text(text: str) -> None:
-#         """Callback when text is transcribed."""
-#         if text == "":
-#             return
-#         message_structure = SpeechTranscriptMessage(transcript=text)
-#         message = asdict(message_structure)
-#         asyncio.run_coroutine_threadsafe(websocket.send_json(message), loop)
-
-#     mono_start_speaking_message = asdict(StartSpeakingMessage())
-#     mono_stop_speaking_message = asdict(StopSpeakingMessage())
-
-#     def on_start_speaking() -> None:
-#         """Callback when recording starts."""
-#         asyncio.run_coroutine_threadsafe(
-#             websocket.send_json(mono_start_speaking_message), loop
-#         )
-
-#     def on_stop_speaking() -> None:
-#         """Callback when recording stops."""
-#         asyncio.run_coroutine_threadsafe(
-#             websocket.send_json(mono_stop_speaking_message), loop
-#         )
-
-#     sst_client = STTClient(on_text, on_start_speaking, on_stop_speaking)
-#     sst_client.start()
-#     await websocket.accept()
-
-#     try:
-#         while True:
-#             data = await websocket.receive_bytes()
-#             int16_array = numpy.frombuffer(data, dtype=numpy.int16)
-#             sst_client.feed(int16_array)
-#     except Exception as e:
-#         sst_client.stop()
-
-
-@stt_router.websocket("/stt")
-async def speech_to_text_v2(websocket: WebSocket) -> None:
-    """Receive audio bytes and return text.
-
-    Args:
-        websocket (WebSocket): a WebSocket connection.
-    """
-    websocket.client.host
-    # TODO Check authentication.
-
-    loop = asyncio.get_event_loop()
-
-    def on_text(text: str) -> None:
-        """Callback when text is transcribed."""
-        if text == "":
-            return
-        message_structure = SpeechTranscriptMessage(transcript=text)
-        message = asdict(message_structure)
-        asyncio.run_coroutine_threadsafe(websocket.send_json(message), loop)
-
-    mono_start_speaking_message = asdict(StartSpeakingMessage())
-    mono_stop_speaking_message = asdict(StopSpeakingMessage())
-
-    def on_start_speaking() -> None:
-        """Callback when recording starts."""
-        asyncio.run_coroutine_threadsafe(
-            websocket.send_json(mono_start_speaking_message), loop
-        )
-
-    def on_stop_speaking() -> None:
-        """Callback when recording stops."""
-        asyncio.run_coroutine_threadsafe(
-            websocket.send_json(mono_stop_speaking_message), loop
-        )
-
-    # stt_client = STTClientV2(on_text, on_start_speaking, on_stop_speaking)
-    stt_client = SpeechmaticsClient(on_text, on_start_speaking, on_stop_speaking)
-    await websocket.accept()
-    logging.info(
-        f"WebSocket connection established at {datetime.now()} from host {websocket.client.host}."
-    )
-    try:
-        while True:
-            data = await websocket.receive_bytes()
-            stt_client.feed(data)
-    # TODO Add a handler for stt client exceptions.
-    except RuntimeError:
-        logging.error(f"STT client closed unexpectedly.")
-        stt_client.close()
-        await websocket.close()
-    except Exception as e:
-        stt_client.close()
-        logging.info(
-            f"WebSocket connection closed at {datetime.now()} from host {websocket.client.host}."
-        )
-
-@stt_router.get("/stt/health")
-def health_check() -> dict:
-    return {"status": "ok", "message": "STT stt is running."}
+        try:
+            while True:
+                data = await websocket.receive_bytes()
+                await rtstt_client.feed(connection_id, data)
+        except RuntimeError:
+            logging.error(f"STT client closed unexpectedly.")
+            rtstt_client.disconnect(connection_id)
+            await websocket.close()
+        except WebSocketDisconnect:
+            rtstt_client.disconnect(connection_id)

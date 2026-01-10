@@ -1,5 +1,7 @@
+import asyncio
 import queue
 from abc import ABC, abstractmethod
+from typing import Any, Coroutine
 
 
 class STTEvent(ABC):
@@ -22,42 +24,49 @@ class StopSpeakingEvent(STTEvent):
     pass
 
 
-class STTEventQueue(ABC):
-
-    @abstractmethod
-    def put(self, event: STTEvent):
-        pass
-
-    @abstractmethod
-    def get(self) -> STTEvent:
-        pass
-
-
 class EventFactory:
 
     __START_SPEAKING_EVENT = StartSpeakingEvent()
     __STOP_SPEAKING_EVENT = StopSpeakingEvent()
 
     @staticmethod
-    def get_start_speaking_event() -> StartSpeakingEvent:
+    def start_speaking_event() -> StartSpeakingEvent:
         return EventFactory.__START_SPEAKING_EVENT
 
     @staticmethod
-    def get_stop_speaking_event() -> StopSpeakingEvent:
+    def stop_speaking_event() -> StopSpeakingEvent:
         return EventFactory.__STOP_SPEAKING_EVENT
 
     @staticmethod
-    def get_text_event(text: str) -> TextEvent:
+    def text_event(text: str) -> TextEvent:
         return TextEvent(text)
+
+
+class STTEventQueue(ABC):
+
+    @abstractmethod
+    async def put(self, event: STTEvent):
+        pass
+
+    @abstractmethod
+    async def get(self) -> STTEvent:
+        pass
+
+    @abstractmethod
+    async def close(self):
+        pass
 
 
 class SimpleSTTEventQueue(STTEventQueue):
 
     def __init__(self):
-        self.queue = queue.Queue()
+        self.__queue = asyncio.Queue()
 
-    def put(self, event: STTEvent):
-        self.queue.put(event)
+    async def put(self, event: STTEvent):
+        await self.__queue.put(event)
 
-    def get(self) -> STTEvent:
-        return self.queue.get()
+    async def get(self) -> STTEvent:
+        return await self.__queue.get()
+
+    async def close(self):
+        self.__queue.shutdown()

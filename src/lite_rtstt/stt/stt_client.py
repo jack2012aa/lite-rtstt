@@ -42,8 +42,6 @@ class WhisperClient(STTClient):
         is_done: asyncio.Semaphore
         result: str
 
-    __TOMBSTONE = Work(None, None, None, None)
-
     def __init__(self, config: STTConfig, download_root: str) -> None:
         """A Whisper-based STT client."""
 
@@ -59,16 +57,17 @@ class WhisperClient(STTClient):
     def __worker(self):
         while not self.__closed.load():
             self.__input_semaphore.acquire()
-            work = self.__inputs.get()
-            if work == WhisperClient.__TOMBSTONE:
+            try:
+                work = self.__inputs.get()
+                if not isinstance(work, WhisperClient.Work):
+                    logging.error("Whisper worker received an invalid work.", stack_info=True)
+                    exit(1)
+                result = self.__model.transcribe(audio=work.audio_array)
+                if result.get("text", None) is not None:
+                    work.result = result["text"]
+                work.loop.call_soon_threadsafe(work.is_done.release)
+            except queue.ShutDown:
                 break
-            if not isinstance(work, WhisperClient.Work):
-                logging.error("Whisper worker received an invalid work.", stack_info=True)
-                exit(1)
-            result = self.__model.transcribe(audio=work.audio_array)
-            if result.get("text", None) is not None:
-                work.result = result["text"]
-            work.loop.call_soon_threadsafe(work.is_done.release)
 
     def start(self):
         if self.started:
@@ -80,10 +79,11 @@ class WhisperClient(STTClient):
         logging.debug("Whisper pool starts.")
 
     def close(self):
-        self.__closed.store(True)
-        self.__inputs.put(WhisperClient.__TOMBSTONE)
-        self.__input_semaphore.release()
-        self.__whisper_thread.join()
+        if not self.__closed.load():
+            self.__closed.store(True)
+            self.__inputs.shutdown(True)
+            self.__input_semaphore.release()
+            self.__whisper_thread.join()
 
     async def transcribe(self, audio_buffer: AudioBuffer) -> str:
         work = WhisperClient.Work(audio_buffer.to_ndarray(), asyncio.get_running_loop(), asyncio.Semaphore(0), "")
