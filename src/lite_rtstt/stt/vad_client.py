@@ -61,7 +61,7 @@ class MockVADClient(VADClient):
             raise RuntimeError("MockVADClient is not ready.")
         if self.__closed:
             raise RuntimeError("MockVADClient is closed.")
-        return self.__results.get_nowait()
+        return await self.__results.get()
 
 class SileroClient(VADClient):
 
