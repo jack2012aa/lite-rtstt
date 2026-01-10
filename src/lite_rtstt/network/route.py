@@ -7,10 +7,6 @@ from dataclasses import asdict
 
 from fastapi import APIRouter, WebSocket
 
-from service.stt_client import STTClientV2
-from service.speechmatics_api_client import SpeechmaticsClient
-from service.structure import *
-
 __all__ = ["stt_router"]
 
 
@@ -124,4 +120,4 @@ async def speech_to_text_v2(websocket: WebSocket) -> None:
 
 @stt_router.get("/stt/health")
 def health_check() -> dict:
-    return {"status": "ok", "message": "STT service is running."}
+    return {"status": "ok", "message": "STT stt is running."}
