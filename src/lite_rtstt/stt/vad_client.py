@@ -46,7 +46,7 @@ class MockVADClient(VADClient):
         self.__started = False
         self.__closed = False
 
-    async def append_result(self, *results: bool) -> None:
+    async def append_results(self, *results: bool) -> None:
         for result in results:
             await self.__results.put(result)
 
