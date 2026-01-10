@@ -11,7 +11,7 @@ from atomicx import AtomicBool
 from silero_vad import load_silero_vad, get_speech_timestamps
 
 from lite_rtstt.atomic.counter import Counter
-from lite_rtstt.stt.audiobuffer import AudioBuffer
+from lite_rtstt.stt.audio_buffer import AudioBuffer
 from lite_rtstt.stt.config import STTConfig
 
 

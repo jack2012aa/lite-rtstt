@@ -9,7 +9,7 @@ import numpy as np
 import whisper
 from atomicx.atomicx import AtomicBool
 
-from lite_rtstt.stt.audiobuffer import AudioBuffer
+from lite_rtstt.stt.audio_buffer import AudioBuffer
 from lite_rtstt.stt.config import STTConfig
 
 
@@ -30,6 +30,32 @@ class STTClient(ABC):
     def close(self):
         """Close the STT service."""
         pass
+
+
+class MockSTTClient(STTClient):
+    """Mock STT client."""
+
+    def __init__(self):
+        self.__started = False
+        self.__closed = False
+        self.__results = asyncio.Queue()
+
+    async def append_results(self, *results: tuple[str]):
+        for result in results:
+            await self.__results.put(result)
+
+    def start(self):
+        self.__started = True
+
+    def close(self):
+        self.__closed = True
+
+    async def transcribe(self, audio_buffer: AudioBuffer) -> str:
+        if not self.__started:
+            raise RuntimeError("MockSTTClient is not started.")
+        if self.__closed:
+            raise RuntimeError("MockSTTClient is closed.")
+        return await self.__results.get()
 
 
 class WhisperClient(STTClient):
@@ -90,6 +116,8 @@ class WhisperClient(STTClient):
     async def transcribe(self, audio_buffer: AudioBuffer) -> str:
         if not self.started:
             raise RuntimeError("Whisper is not ready.")
+        if self.__closed.load():
+            raise RuntimeError("Whisper is closed.")
         work = WhisperClient.Work(
             audio_buffer.to_float32_ndarray(),
             asyncio.get_running_loop(),

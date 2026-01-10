@@ -4,7 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from enum import Enum
 
-from lite_rtstt.stt.audiobuffer import AudioBuffer
+from lite_rtstt.stt.audio_buffer import AudioBuffer
 from lite_rtstt.stt.config import STTConfig
 from lite_rtstt.stt.event import STTEventQueue, SimpleSTTEventQueue, EventFactory
 from lite_rtstt.stt.stt_client import STTClient

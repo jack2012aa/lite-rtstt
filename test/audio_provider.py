@@ -1,4 +1,4 @@
-from lite_rtstt.stt.audiobuffer import AudioBuffer
+from lite_rtstt.stt.audio_buffer import AudioBuffer
 
 
 def from_int16_pcm(path: str, chunk_ms: int = 30) -> AudioBuffer:
