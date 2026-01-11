@@ -47,3 +47,5 @@ def create_router(rtstt_client: RTSTTClient) -> APIRouter:
             logging.error(e, stack_info=True)
             rtstt_client.disconnect(connection_id)
             await websocket.close()
+
+    return router
