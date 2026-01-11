@@ -1,0 +1,32 @@
+name: lite-rtstt
+base: core24
+version: '0.1.0'
+summary: A real-time speech to text server.
+description: |
+  A lightweight, efficient, real-time Speech-to-Text server.
+  It combines WebRTC VAD, Silero VAD, and OpenAI Whisper.
+
+grade: devel
+confinement: devmode
+parts:
+  lite-rtstt:
+    plugin: python
+    source: .
+    python-packages:
+      - setuptools
+      - wheel
+    build-packages:
+      - portaudio19-dev
+      - build-essential
+    stage-packages:
+      - libportaudio2
+      - libgomp1
+      - ffmpeg
+apps:
+  lite-rtstt:
+    command: bin/rtstt
+    plugs:
+      - network
+      - network-bind
+      - audio-record
+      - home
