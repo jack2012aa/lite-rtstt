@@ -1,32 +1,11 @@
 import asyncio
 import os
-import re
 import shutil
-import string
 import unittest
-from difflib import SequenceMatcher
 
 from lite_rtstt.stt.config import STTConfig
 from lite_rtstt.stt.stt_client import MockSTTClient, WhisperClient
-from test.audio_provider import from_int16_pcm, get_silence_audio
-
-
-def normalize_text(text: str) -> str:
-    text = text.lower()
-    text = text.translate(str.maketrans('', '', string.punctuation))
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
-
-def assert_text_similar(test_case, expected, actual, threshold=0.8):
-    norm_expected = normalize_text(expected)
-    norm_actual = normalize_text(actual)
-    ratio = SequenceMatcher(None, norm_expected, norm_actual).ratio()
-
-    test_case.assertGreater(
-        ratio,
-        threshold,
-        f"Text similarity {ratio:.2f} is below threshold {threshold}.\nExpected: {norm_expected}\nActual: {norm_actual}"
-    )
+from test.utils import from_int16_pcm, get_silence_audio, assert_text_similar
 
 
 class MockSTTClientTest(unittest.IsolatedAsyncioTestCase):

@@ -1,12 +1,12 @@
 """An AudioToTextRecorder client."""
 import asyncio
-import logging
+import random
 from abc import ABC, abstractmethod
 from enum import Enum
 
 from lite_rtstt.stt.audio_buffer import AudioBuffer
 from lite_rtstt.stt.config import STTConfig
-from lite_rtstt.stt.event import STTEventQueue, SimpleSTTEventQueue, EventFactory
+from lite_rtstt.stt.event import STTEventQueue, SimpleSTTEventQueue, EventFactory, STTEvent
 from lite_rtstt.stt.stt_client import STTClient
 from lite_rtstt.stt.vad_client import VADClient
 
@@ -17,6 +17,10 @@ class RTSTTClient(ABC):
     @abstractmethod
     def start(self):
         """Start the service."""
+        pass
+
+    @abstractmethod
+    def close(self):
         pass
 
     @abstractmethod
@@ -41,6 +45,59 @@ class RTSTTClient(ABC):
             audio (numpy.ndarray): The audio data.
         """
         pass
+
+
+class MockRTSTTClient(RTSTTClient):
+
+    def __init__(self):
+        self.__started = False
+        self.__closed = False
+        self.__results: dict[int, asyncio.Queue[STTEvent]] = {}
+        self.__queues: dict[int, STTEventQueue] = {}
+
+    async def append_results(self, connection_id: int, *results: STTEvent):
+        for result in results:
+            await self.__results[connection_id].put(result)
+
+    def start(self) -> None:
+        self.__started = True
+
+    def close(self) -> None:
+        self.__closed = True
+
+    def connect(self) -> tuple[STTEventQueue, int]:
+        if not self.__started:
+            raise RuntimeError("MockRTSTTClient is not started.")
+        if self.__closed:
+            raise RuntimeError("MockRTSTTClient is closed.")
+        connection_id = random.randint(1, 1000000)
+        queue = SimpleSTTEventQueue()
+        self.__results[connection_id] = asyncio.Queue()
+        self.__queues[connection_id] = queue
+        return queue, connection_id
+
+    def disconnect(self, connection_id: int) -> None:
+        if not self.__started:
+            raise RuntimeError("MockRTSTTClient is not started.")
+        if self.__closed:
+            return
+        if self.__queues.get(connection_id, None) is None:
+            raise KeyError("Connection id not found.")
+        self.__results.pop(connection_id)
+        self.__queues.pop(connection_id)
+
+    async def feed(self, connection_id: int, audio: bytes) -> None:
+        if not self.__started:
+            raise RuntimeError("MockRTSTTClient is not started.")
+        if self.__closed:
+            raise RuntimeError("MockRTSTTClient is closed.")
+        if self.__queues.get(connection_id, None) is None:
+            raise KeyError("Connection id not found.")
+
+        results = self.__results.get(connection_id)
+        result = await results.get()
+        queue = self.__queues.get(connection_id)
+        await queue.put(result)
 
 
 class ThreeLayerRTSTTClient(RTSTTClient):
@@ -87,9 +144,9 @@ class ThreeLayerRTSTTClient(RTSTTClient):
                     self.__state = self.State.SILENCE
                     self.__audio_buffer = AudioBuffer()
 
-        async def __feed_from_speaking(self) -> asyncio.Task[str] | None:
-            is_speaking = await self.__second_vad_client.is_active(self.__audio_buffer)
-            if not is_speaking:
+        async def __feed_from_speaking(self, new_buffer: AudioBuffer) -> asyncio.Task[str] | None:
+            is_active = await self.__first_vad_client.is_active(new_buffer)
+            if not is_active:
                 self.__silence_chunks += 1
                 if self.__silence_chunks >= self.__max_silence_chunks:
                     audio_buffer = self.__audio_buffer
@@ -118,7 +175,7 @@ class ThreeLayerRTSTTClient(RTSTTClient):
             elif self.__state == self.State.ACTIVE:
                 await self.__feed_from_active()
             elif self.__state == self.State.SPEAKING:
-                task = await self.__feed_from_speaking()
+                task = await self.__feed_from_speaking(new_buffer)
             else:
                 raise RuntimeError(f"Undefined audio stream state {self.__state}")
             return current_state, self.__state, task
@@ -136,6 +193,8 @@ class ThreeLayerRTSTTClient(RTSTTClient):
         The second layer VAD can be more powerful to save STT's energy.
         """
 
+        self.__started = False
+        self.__closed = False
         self.__first_vad_client = first_vad_client
         self.__second_vad_client = second_vad_client
         self.__stt_client = stt_client
@@ -147,11 +206,17 @@ class ThreeLayerRTSTTClient(RTSTTClient):
         self.__max_buffered_chunks = config.max_buffered_chunks
 
     def start(self):
-        self.__first_vad_client.start()
-        self.__second_vad_client.start()
-        self.__stt_client.start()
+        if not self.__started:
+            self.__first_vad_client.start()
+            self.__second_vad_client.start()
+            self.__stt_client.start()
+            self.__started = True
 
     def connect(self) -> tuple[STTEventQueue, int]:
+        if not self.__started:
+            raise RuntimeError("ThreeLayerRTSTTClient is not started.")
+        if self.__closed:
+            raise RuntimeError("ThreeLayerRTSTTClient is closed.")
         connection_id = self.__increasing_id
         self.__increasing_id += 1
         self.__state_machines[connection_id] = self.AudioStreamStateMachine(
@@ -166,10 +231,18 @@ class ThreeLayerRTSTTClient(RTSTTClient):
         return self.__queues[connection_id], connection_id
 
     def disconnect(self, connection_id: int) -> None:
+        if not self.__started:
+            raise RuntimeError("ThreeLayerRTSTTClient is not started.")
+        if self.__state_machines.get(connection_id) is None:
+            raise KeyError("Connection id not found.")
         self.__state_machines.pop(connection_id, None)
         self.__queues.pop(connection_id, None)
 
     async def feed(self, connection_id: int, audio: bytes):
+        if not self.__started:
+            raise RuntimeError("ThreeLayerRTSTTClient is not started")
+        if self.__closed:
+            raise RuntimeError("ThreeLayerRTSTTClient is closed")
         state_machine = self.__state_machines[connection_id]
         old_state, new_state, task = await state_machine.feed(audio)
         if old_state == self.AudioStreamStateMachine.State.ACTIVE and new_state == self.AudioStreamStateMachine.State.SPEAKING:
@@ -180,6 +253,8 @@ class ThreeLayerRTSTTClient(RTSTTClient):
             await self.__queues[connection_id].put(EventFactory.text_event(text))
 
     def close(self):
-        self.__first_vad_client.close()
-        self.__second_vad_client.close()
-        self.__stt_client.close()
+        if not self.__closed:
+            self.__first_vad_client.close()
+            self.__second_vad_client.close()
+            self.__stt_client.close()
+            self.__closed = True

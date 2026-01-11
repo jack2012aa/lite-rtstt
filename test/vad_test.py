@@ -3,7 +3,7 @@ import unittest
 from lite_rtstt.stt.audio_buffer import AudioBuffer
 from lite_rtstt.stt.config import STTConfig
 from lite_rtstt.stt.vad_client import MockVADClient, SileroClient, WebRTCClient
-from test.audio_provider import from_int16_pcm, get_silence_audio
+from test.utils import from_int16_pcm, get_silence_audio
 
 
 class MockVADClientTest(unittest.IsolatedAsyncioTestCase):

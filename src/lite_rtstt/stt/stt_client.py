@@ -40,7 +40,7 @@ class MockSTTClient(STTClient):
         self.__closed = False
         self.__results = asyncio.Queue()
 
-    async def append_results(self, *results: tuple[str]):
+    async def append_results(self, *results: str):
         for result in results:
             await self.__results.put(result)
 
@@ -60,6 +60,7 @@ class MockSTTClient(STTClient):
 
 class WhisperClient(STTClient):
 
+    __silence_padding = np.zeros(8000, dtype=np.float32)
 
     @dataclass
     class Work:
@@ -118,8 +119,10 @@ class WhisperClient(STTClient):
             raise RuntimeError("Whisper is not ready.")
         if self.__closed.load():
             raise RuntimeError("Whisper is closed.")
+        raw_audio = audio_buffer.to_float32_ndarray()
+        padded_audio = np.concatenate([self.__silence_padding, raw_audio])
         work = WhisperClient.Work(
-            audio_buffer.to_float32_ndarray(),
+            padded_audio,
             asyncio.get_running_loop(),
             asyncio.Future())
         self.__inputs.put(work)
