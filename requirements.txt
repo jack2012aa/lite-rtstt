@@ -4,3 +4,5 @@ silero-vad
 atomicx
 openai-whisper
 webrtcvad-wheels
+pyaudio
+websockets
