@@ -40,7 +40,7 @@ parts:
       pip install .
 apps:
   lite-rtstt:
-    command: bin/rtstt
+    command: bin/python $SNAP/bin/rtstt
     plugs:
       - network
       - network-bind
