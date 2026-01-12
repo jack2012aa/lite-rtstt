@@ -8,6 +8,12 @@ description: |
 
 grade: devel
 confinement: devmode
+package-repositories:
+  - type: apt
+    components: [main]
+    suites: [noble]
+    key-id: F23C5A6CF475977595C89F51BA6932366A755776
+    url: https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu
 parts:
   lite-rtstt:
     plugin: python
@@ -16,12 +22,22 @@ parts:
       - setuptools
       - wheel
     build-packages:
+      - python3.13
+      - python3.13-venv
+      - python3.13-dev
       - portaudio19-dev
       - build-essential
     stage-packages:
+      - python3.13
+      - python3.13-venv
       - libportaudio2
       - libgomp1
       - ffmpeg
+    override-build: |
+      python3.13 -m venv $SNAPCRAFT_PART_INSTALL
+      . $SNAPCRAFT_PART_INSTALL/bin/activate
+      pip install -U pip setuptools wheel
+      pip install .
 apps:
   lite-rtstt:
     command: bin/rtstt
