@@ -89,14 +89,6 @@ rtstt live
 rtstt live --url ws://192.168.1.10:8000/rtstt
 ```
 
-### 3. File Transcription
-
-Simulates a real-time stream using a local int16 PCM or WAV file. Useful for testing or transcribing pre-recorded audio.
-
-```bash
-rtstt transcribe --file test/data/7s_i16.pcm
-```
-
 ---
 
 ## ⚙️ Configuration

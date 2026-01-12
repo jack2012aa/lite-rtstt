@@ -102,48 +102,6 @@ def run_live(args):
     except KeyboardInterrupt:
         pass
 
-async def _transcribe_file(uri: str, file_path: str):
-    if not os.path.exists(file_path):
-        print(f"Error: File not found: {file_path}")
-        return
-
-    async def receive_loop(ws):
-        try:
-            async for message in ws:
-                data = json.loads(message)
-                msg_type = data.get("type")
-                if msg_type == "text":
-                    print(f"\rUser: {data['text']}")
-        except websockets.exceptions.ConnectionClosed:
-            pass
-
-    chunk_size = 960  # 30ms @ 16kHz (16000 * 0.03 * 2 bytes)
-
-    async with websockets.connect(uri) as websocket:
-        recv_task = asyncio.create_task(receive_loop(websocket))
-        with open(file_path, "rb") as f:
-            audio_data = f.read()
-        for i in range(0, len(audio_data), chunk_size):
-            chunk = audio_data[i: i + chunk_size]
-            await websocket.send(chunk)
-
-        silence = b'\x00' * chunk_size
-        for _ in range(100):
-            await websocket.send(silence)
-
-        await websocket.close()
-        await recv_task
-
-def run_transcribe(args):
-    target_url = args.url or "ws://localhost:8766/rtstt"
-    if not args.file:
-        print("Error: Please provide a file path using --file")
-        return
-    try:
-        asyncio.run(_transcribe_file(target_url, args.file))
-    except KeyboardInterrupt:
-        pass
-
 def main():
     parser = argparse.ArgumentParser(description="Lite Real-time Speech to Text")
 
@@ -160,11 +118,6 @@ def main():
     live_parser = subparsers.add_parser("live", help="Transcribe from microphone")
     live_parser.add_argument("--url", type=str, help="Server to connect to")
     live_parser.set_defaults(func=run_live)
-
-    transcribe_parser = subparsers.add_parser("transcribe", help="Transcribe from a file")
-    transcribe_parser.add_argument("--url", type=str, help="Server to connect to")
-    transcribe_parser.add_argument("--file", type=str, help="File to transcribe")
-    transcribe_parser.set_defaults(func=run_transcribe)
 
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
