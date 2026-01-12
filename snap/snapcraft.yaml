@@ -34,7 +34,7 @@ parts:
       - libgomp1
       - ffmpeg
     override-build: |
-      python3.13 -m venv $SNAPCRAFT_PART_INSTALL
+      python3.13 -m venv $SNAPCRAFT_PART_INSTALL --copies
       . $SNAPCRAFT_PART_INSTALL/bin/activate
       pip install -U pip setuptools wheel
       pip install .
@@ -45,4 +45,5 @@ apps:
       - network
       - network-bind
       - audio-record
+      - audio-playback
       - home
