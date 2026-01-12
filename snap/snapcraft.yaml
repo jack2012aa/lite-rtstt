@@ -39,10 +39,17 @@ parts:
       pip install .
 apps:
   lite-rtstt:
-    command: bin/python $SNAP/bin/rtstt
+    command: bin/python $SNAP/bin/lite-rtstt
     plugs:
       - network
       - network-bind
       - audio-record
       - audio-playback
       - home
+  server:
+    command: bin/python $SNAP/bin/lite-rtstt run
+    daemon: simple
+    restart-condition: always
+    plugs:
+      - network
+      - network-bind

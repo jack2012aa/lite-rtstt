@@ -34,4 +34,4 @@ where = ["src"]
 include = ["lite_rtstt*"]
 
 [project.scripts]
-rtstt = "lite_rtstt.main:main"
+lite-rtstt = "lite_rtstt.main:main"
