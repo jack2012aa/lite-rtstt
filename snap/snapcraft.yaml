@@ -1,13 +1,12 @@
 name: lite-rtstt
 base: core24
-version: '0.1.0'
+version: '1.0.0'
 summary: A real-time speech to text server.
-description: |
-  A lightweight, efficient, real-time Speech-to-Text server.
+description: A lightweight, efficient, real-time Speech-to-Text server.
   It combines WebRTC VAD, Silero VAD, and OpenAI Whisper.
 
-grade: devel
-confinement: devmode
+grade: stable
+confinement: strict
 package-repositories:
   - type: apt
     components: [main]

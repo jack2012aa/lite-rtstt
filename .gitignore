@@ -18,3 +18,4 @@ vcs.xml
 workspace.xml
 *.txt
 PKG-INFO
+*.snap
