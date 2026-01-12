@@ -1,9 +1,13 @@
+import asyncio
+import base64
 import os
 import shutil
+import threading
 import unittest
 from dataclasses import replace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from lite_rtstt.stt.config import STTConfig
 from lite_rtstt.stt.rtstt_client import ThreeLayerRTSTTClient
@@ -41,11 +45,11 @@ class WebSocketIntegrationTest(unittest.TestCase):
 
     def tearDown(self):
         self.__rtstt.close()
-        if os.path.exists(self.__model_dir):
-            shutil.rmtree(self.__model_dir)
+        # if os.path.exists(self.__model_dir):
+        #     shutil.rmtree(self.__model_dir)
 
     def test_websocket_transcription_flow(self):
-        pcm_path = "test/data/7s_i16.pcm"
+        pcm_path = "test/data/42s_i16.pcm"
         if not os.path.exists(pcm_path):
             self.skipTest("PCM data file not found")
 
@@ -54,44 +58,58 @@ class WebSocketIntegrationTest(unittest.TestCase):
 
         chunk_size = int(16000 * 0.03 * 2)  # 960 bytes
         with self.client.websocket_connect("/rtstt") as websocket:
+
+            messages = [
+                {"type": "start speaking"},
+                {"type": "stop speaking"},
+                {"type": "text", "text": ' After giving an integer matrix grid and an array queries of size k, find an array answer of size k such sets for each integer queries i, you start in the top left cell of the'},
+                {"type": "start speaking"},
+                {"type": "stop speaking"},
+                {"type": "text",
+                 "text": ' Tricks and repeats the following process. If queries i is strictly greater than the value of the current cell that you are in, then you get one point.'},
+                {"type": "start speaking"},
+                {"type": "stop speaking"},
+                {"type": "text",
+                 "text": ' If it is first time visiting this cell, and you can move to any adjacent cell in all four directions. Otherwise, you do not get any points, and you end this process.'},
+            ]
+            exception = []
+            def handle_message():
+                try:
+                    for expected in messages:
+                        actual = websocket.receive_json()
+                        self.assertEqual(expected["type"], actual["type"])
+                        if expected["type"] == "text":
+                            assert_text_similar(self, expected["text"], actual["text"])
+                    try:
+                        extra_msg = websocket.receive_json()
+                        raise AssertionError(f"Expected WebSocket to close, but received: {extra_msg}")
+                    except WebSocketDisconnect:
+                        pass
+                except Exception as e:
+                    exception.append(e)
+
+            thread = threading.Thread(target=handle_message)
+            thread.start()
+
             total_chunks = len(audio_data) // chunk_size
             for i in range(total_chunks):
                 start = i * chunk_size
                 end = start + chunk_size
                 chunk = audio_data[start:end]
-                websocket.send_bytes(chunk)
+                b64 = base64.b64encode(chunk).decode("utf-8")
+                websocket.send_json({"type": "audio chunk", "data": b64})
 
             silence_chunks = int(1500 / 30)
             silence = b'\x00' * chunk_size
+            b64 = base64.b64encode(silence).decode("utf-8")
 
             for _ in range(silence_chunks):
-                websocket.send_bytes(silence)
+                websocket.send_json({"type": "audio chunk", "data": b64})
 
-            received_start = False
-            received_stop = False
-            received_text = None
-
-            try:
-                while not received_text:
-                    data = websocket.receive_json()
-                    msg_type = data.get("type")
-                    if msg_type == "start speaking":
-                        received_start = True
-                    elif msg_type == "stop speaking":
-                        received_stop = True
-                    elif msg_type == "text":
-                        received_text = data.get("text")
-                        break
-
-            except Exception as e:
-                self.fail(f"WebSocket communication failed or timed out: {e}")
-
-            self.assertTrue(received_start, "Did not receive 'start speaking' event")
-            self.assertTrue(received_stop, "Did not receive 'stop speaking' event")
-            self.assertIsNotNone(received_text, "Did not receive transcript")
-
-            expected_text = "You are given an integer matrix grid and an array queries of size k."
-            assert_text_similar(self, expected_text, received_text, threshold=0.7)
+            websocket.send_json({"type": "EOF"})
+            thread.join()
+            if len(exception) > 0:
+                raise exception[0]
 
 
 if __name__ == "__main__":

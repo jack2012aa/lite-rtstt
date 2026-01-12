@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import base64
 import json
 import os
 import logging
@@ -84,7 +85,9 @@ async def _stream_microphone(uri: str):
         try:
             while True:
                 data = stream.read(CHUNK, exception_on_overflow=False)
-                await websocket.send(data)
+                b64 = base64.b64encode(data).decode("utf-8")
+                message = {"type": "audio chunk", "data": b64}
+                await websocket.send(json.dumps(message))
                 await asyncio.sleep(0)
         except KeyboardInterrupt:
             print("\nStopping...")
@@ -92,8 +95,8 @@ async def _stream_microphone(uri: str):
             stream.stop_stream()
             stream.close()
             p.terminate()
-            await websocket.close()
-            recv_task.cancel()
+            await websocket.send(json.dumps({"type": "EOF"}))
+            await recv_task
 
 def run_live(args):
     target_url = args.url or "ws://localhost:8766/rtstt"
@@ -125,13 +128,17 @@ async def _transcribe_file(uri: str, file_path: str):
             audio_data = f.read()
         for i in range(0, len(audio_data), chunk_size):
             chunk = audio_data[i: i + chunk_size]
-            await websocket.send(chunk)
+            b64 = base64.b64encode(chunk).decode("utf-8")
+            message = {"type": "audio chunk", "data": b64}
+            await websocket.send(json.dumps(message))
 
         silence = b'\x00' * chunk_size
+        b64 = base64.b64encode(silence).decode("utf-8")
+        message = {"type": "audio chunk", "data": b64}
         for _ in range(100):
-            await websocket.send(silence)
+            await websocket.send(json.dumps(message))
 
-        await websocket.close()
+        await websocket.send(json.dumps({"type": "EOF"}))
         await recv_task
 
 def run_transcribe(args):

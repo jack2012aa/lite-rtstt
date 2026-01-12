@@ -1,5 +1,5 @@
 """Speech to text route."""
-
+import base64
 from datetime import datetime
 import asyncio
 import logging
@@ -18,12 +18,13 @@ def create_router(rtstt_client: RTSTTClient) -> APIRouter:
         await websocket.accept()
         logging.info(f"WebSocket connection established at {datetime.now()} from host {websocket.client.host}.")
         queue, connection_id = rtstt_client.connect()
-        is_closed = False
 
         async def handle_event():
-            while not is_closed:
-                try:
+            try:
+                while True:
                     event = await queue.get()
+                    if event is None:
+                        break
                     if isinstance(event, StartSpeakingEvent):
                         await websocket.send_json({"type": "start speaking"})
                     elif isinstance(event, StopSpeakingEvent):
@@ -32,20 +33,28 @@ def create_router(rtstt_client: RTSTTClient) -> APIRouter:
                         await websocket.send_json({"type": "text", "text": event.text})
                     else:
                         logging.error(f"Unknown event type: {event}", stack_info=True)
-                except asyncio.QueueShutDown:
-                    return
+            except asyncio.QueueShutDown:
+                return
 
         task = asyncio.create_task(handle_event())
 
         try:
             while True:
-                data = await websocket.receive_bytes()
-                await rtstt_client.feed(connection_id, data)
+                message = await websocket.receive_json()
+                if message["type"] == "audio chunk":
+                    bytes = base64.b64decode(message["data"])
+                    await rtstt_client.feed(connection_id, bytes)
+                elif message["type"] == "EOF":
+                    # Since ThreeLayerRTSTTClient#feed is blocking, closing here is safe
+                    break
         except WebSocketDisconnect:
-            rtstt_client.disconnect(connection_id)
+            pass
         except Exception as e:
             logging.error(e, stack_info=True)
+        finally:
             rtstt_client.disconnect(connection_id)
+            await queue.put(None)
+            await task
             await websocket.close()
 
     return router

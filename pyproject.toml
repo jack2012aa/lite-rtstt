@@ -7,7 +7,7 @@ name = "lite-rtstt"
 version = "0.1.0"
 description = "A real-time speech to text server based on WebRTC, Silero VAD and Whisper."
 readme = "readme.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 license = {text = "MIT"}
 authors = [
     {name = "Chang-Yu Huang", email = "changyuh1919@vt.edu"}
