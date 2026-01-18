@@ -103,12 +103,6 @@ lite-rtstt transcribe --url ws://192.168.1.10:8000/rtstt --file test/data/42s_i1
 
 ---
 
-這是在 `readme.md` 中關於 Snap 安裝、權限連接與 Daemon 設定的補充內容。這段說明是基於你的程式碼中對 `SNAP_DATA` 環境變數的讀取邏輯  以及標準 Snap 架構撰寫的。
-
-你可以將以下內容新增至 `readme.md` 的 **Installation** 或 **Usage** 章節之後：
-
----
-
 ## 📦 Snap Configuration & Daemon Management
 
 If you installed `lite-rtstt` via Snap, the application runs in a sandboxed environment. You need to configure permissions and the daemon service manually.
