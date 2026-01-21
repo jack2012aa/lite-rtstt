@@ -126,7 +126,7 @@ The Snap package includes a background service (daemon) for the STT server. You 
 
 ```bash
 # Check the status of the server
-sudo snap services lite-rtstt
+sudo snap services lite-rtstt.server
 
 # Start/Stop/Restart the service
 sudo snap start lite-rtstt.server
